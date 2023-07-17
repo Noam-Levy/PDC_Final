@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <math.h>
 #include "util.h"
 
 int readPoints(FILE* file, Point** points, int size)
@@ -8,24 +7,9 @@ int readPoints(FILE* file, Point** points, int size)
   int i;
   for (i = 0; i < size; ++i)
   {
-    Point *p = (Point*)malloc(sizeof(Point));
+    Point *p = allocatePoint(size);
     if (!p)
       break;
-    
-    p->distances = (distance_t**)malloc(size * sizeof(distance_t*));
-    if (!p->distances)
-      break;
-    for (int j = 0; j < size; j++)
-    {
-      p->distances[j] = (distance_t*)malloc(sizeof(distance_t));
-      if (p->distances[j] == NULL)
-      {
-        for (int k = 0; k < j; k++)
-          free(points[j]->distances[k]);
-        free(points[j]->distances);
-        break;
-      }
-    }
 
     fscanf(file, "%d %f %f %f %f\n", &p->id, &p->x1, &p->x2, &p->a, &p->b);
     points[i] = p;
@@ -64,14 +48,8 @@ metadata* readData(char* path)
   {
     fprintf(stderr, "Unable to allocate memory for points data\n");
     for (int i = 0; i < allocatedPoints; i++)
-    {
-      // deallocate distances array
-      for (int j = 0; j < data->N; j++)
-        free(data->points[i]->distances[j]);
-      free(data->points[i]->distances);
-      // deallocate point
-      free(data->points[i]);            
-    }
+      deallocatePoint(data->points[i], data->N);           
+    
     free(data->points);
     free(data);
     fclose(f);
@@ -82,24 +60,18 @@ metadata* readData(char* path)
   return data;
 }
 
+void deallocateMetadata(metadata *data)
+{
+  for(int i = 0; i < data->N; i++)
+    deallocatePoint(data->points[i], data->N);
+  free(data->points);
+  free(data);
+}
+
 void setPointsPositions(Point** points, int size, float t)
 {
   for (int i = 0; i < size; i++)
-  {
-    Point* p = points[i];
-    p->x = ((p->x2 - p->x1) / 2) * sin(t * M_PI_2) + ((p->x2 + p->x1) / 2);
-    p->y = p->a * p->x + p->b;
-  }
-}
-
-float calculateDistanceBetweenPoints(Point* p1, Point* p2)
-{
-  if (p1->id == p2->id)
-    return 0;
-
-  float xDist = pow((p2->x - p1->x), 2);
-  float yDist = pow(p2->y - p1->y, 2);
-  return sqrt(xDist + yDist);
+    setPosition(points[i], t);
 }
 
 void calculateDistances(Point** points, int size)

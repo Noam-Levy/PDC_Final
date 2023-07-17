@@ -32,10 +32,11 @@ void main(int argc, char* argv[])
       break;
     totalSatisfiedCounter += temp;
   }
-  if (temp >= 0)
+  if (temp >= 0) // check if no error occourred
   {
     if (totalSatisfiedCounter == 0)
       printf("There were no %d points found for any t.\n", MIN_CRITERIA_POINTS);
   }
-  //TODO: deallocate everything
+
+  deallocateMetadata(data);
 }
