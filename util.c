@@ -101,7 +101,7 @@ int checkProximityCriteria(Point** points, int size, float minimumDistance, int 
     return -1;
   }
   int criteriaMetCounter = 0;
-  for (int i = 0; i < size; i++)
+  for (int i = 0; i < size && criteriaMetCounter < MIN_CRITERIA_POINTS; i++)
     if (isPointSatisfiesCriteria(points[i], size, minimumDistance, minimumPoints))
       pointIds[criteriaMetCounter++] = points[i]->id;
 
@@ -110,7 +110,7 @@ int checkProximityCriteria(Point** points, int size, float minimumDistance, int 
     printf("Points ");
     for (int i = 0; i < MIN_CRITERIA_POINTS - 1; i++)
       printf("%d, ", pointIds[i]);
-    printf("%d satisfy proximity criteria at t=%.2f\n", pointIds[MIN_CRITERIA_POINTS - 1], t);
+    printf("%d satisfy Proximity Criteria at t=%.2f\n", pointIds[MIN_CRITERIA_POINTS - 1], t);
   }
   free(pointIds);
   return criteriaMetCounter;
