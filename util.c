@@ -112,37 +112,34 @@ void calculateDistances(Point** points, int size)
     }
 }
 
-void checkProximityCriteria(Point** points, int size, float minimumDistance, int minimumPoints, float t)
+int isPointSatisfiesCriteria(Point* p, int size, float minimumDistance, int minimumPoints)
 {
-  int *pointIds = (int *)malloc(MIN_CRITERIA_POINTS * sizeof(int));
+  int count = 0;
+  for (int i = 0; i < size; i++)
+    count += p->distances[i]->distance < minimumDistance;
+  return count >= minimumPoints;
+}
+
+int checkProximityCriteria(Point** points, int size, float minimumDistance, int minimumPoints, float t)
+{
+  int* pointIds = (int*)malloc(MIN_CRITERIA_POINTS * sizeof(int));
   if (!pointIds)
   {
     fprintf(stderr, "Failed allocating IDs array.\n");
-    return;
+    return -1;
   }
   int criteriaMetCounter = 0;
-  for (int i = 0; i < size && criteriaMetCounter < MIN_CRITERIA_POINTS; i++)
-  {
-    int timesPointMetCriteria = 0;
-    distance_t** localDistances = points[i]->distances;
-    
-    for (int j = 0; j < size && timesPointMetCriteria < minimumPoints; j++)
-    {
-      if (i != j && localDistances[j]->distance >= minimumDistance)
-        timesPointMetCriteria++;
-    }
-    
-    if (timesPointMetCriteria >= minimumPoints)
+  for (int i = 0; i < size; i++)
+    if (isPointSatisfiesCriteria(points[i], size, minimumDistance, minimumPoints))
       pointIds[criteriaMetCounter++] = points[i]->id;
-  }
 
-  if (criteriaMetCounter < MIN_CRITERIA_POINTS)
-    printf("There are no %d points found for t=%.2f\n", MIN_CRITERIA_POINTS, t);
-  else
+  if (criteriaMetCounter >= MIN_CRITERIA_POINTS)
   {
     printf("Points ");
     for (int i = 0; i < MIN_CRITERIA_POINTS - 1; i++)
       printf("%d, ", pointIds[i]);
     printf("%d satisfy proximity criteria at t=%.2f\n", pointIds[MIN_CRITERIA_POINTS - 1], t);
   }
+  free(pointIds);
+  return criteriaMetCounter;
 }

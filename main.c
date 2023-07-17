@@ -20,13 +20,22 @@ void main(int argc, char* argv[])
   }
   int tCount = data->tCount;
   int size = data->N;
+  int totalSatisfiedCounter = 0;
+  int temp;
   for (int i = 0; i <= tCount; i++)
   {
     float t = 2.0 * i / tCount - 1;
     setPointsPositions(data->points, size, t);
     calculateDistances(data->points, size);
-    checkProximityCriteria(data->points, size, data->D, data->K, t);
+    temp = checkProximityCriteria(data->points, size, data->D, data->K, t);
+    if (temp < 0)
+      break;
+    totalSatisfiedCounter += temp;
   }
-
+  if (temp >= 0)
+  {
+    if (totalSatisfiedCounter == 0)
+      printf("There were no %d points found for any t.\n", MIN_CRITERIA_POINTS);
+  }
   //TODO: deallocate everything
 }

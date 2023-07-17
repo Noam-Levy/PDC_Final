@@ -28,4 +28,4 @@ typedef struct {
 metadata* readData(char* path);
 void setPointsPositions(Point** points, int size, float t);
 void calculateDistances(Point** points, int size);
-void checkProximityCriteria(Point** points, int size, float minimumDistance, int minimumPoints, float t);
+int checkProximityCriteria(Point** points, int size, float minimumDistance, int minimumPoints, float t);
