@@ -22,7 +22,8 @@ void main(int argc, char* argv[])
   int size = data->N;
   int totalSatisfiedCounter = 0;
   int temp;
-  if(freopen("output.txt", "w", stdout) == NULL) // route stdout to output file
+  FILE *output = freopen("output.txt", "w", stdout);
+  if (output == NULL) // route stdout to output file
   {
    fprintf(stderr, "Failed to route stdout to output file. Aborting...\n");
    deallocateMetadata(data);
@@ -43,8 +44,7 @@ void main(int argc, char* argv[])
   // if no error occourred and need to print not found message
   if (temp >= 0 && totalSatisfiedCounter == 0)
       printf("There were no %d points found for any t.\n", MIN_CRITERIA_POINTS);
-  
 
-  fclose(stdout); // close output file
+  fclose(output); // close output file
   deallocateMetadata(data);
 }

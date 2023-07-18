@@ -7,31 +7,18 @@ Point* allocatePoint(int distancesSize)
   Point* p = (Point*)malloc(sizeof(Point));
   if (!p)
     return NULL;
-  p->distances = (distance_t **)malloc(distancesSize * sizeof(distance_t *));
+  p->distances = (float*)malloc(distancesSize * sizeof(float));
   if (!p->distances)
   {
     free(p);
     return NULL;
   }
-  for (int i = 0; i < distancesSize; i++)
-  {
-    p->distances[i] = (distance_t *)malloc(sizeof(distance_t));
-    if (p->distances[i] == NULL)
-    {
-      for (int j = 0; j < i; j++)
-        free(p->distances[j]);
-      free(p->distances);
-      return NULL;
-    }
-  }
-
+  
   return p;
 }
 
-void deallocatePoint(Point* p, int distancesSize)
+void deallocatePoint(Point* p)
 {
-  for (int i = 0; i < distancesSize; i++)
-    free(p->distances[i]);
   free(p->distances);
   free(p);
 }

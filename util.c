@@ -48,7 +48,7 @@ metadata* readData(char* path)
   {
     fprintf(stderr, "Unable to allocate memory for points data\n");
     for (int i = 0; i < allocatedPoints; i++)
-      deallocatePoint(data->points[i], data->N);           
+      deallocatePoint(data->points[i]);           
     
     free(data->points);
     free(data);
@@ -63,7 +63,7 @@ metadata* readData(char* path)
 void deallocateMetadata(metadata *data)
 {
   for(int i = 0; i < data->N; i++)
-    deallocatePoint(data->points[i], data->N);
+    deallocatePoint(data->points[i]);
   free(data->points);
   free(data);
 }
@@ -79,8 +79,7 @@ void calculateDistances(Point** points, int size)
   for (int i = 0; i < size; i++)
     for (int j = 0; j < size; j++)
     {
-      points[i]->distances[j]->id = points[j]->id;
-      points[i]->distances[j]->distance = calculateDistanceBetweenPoints(points[i], points[j]);
+      points[i]->distances[j] = calculateDistanceBetweenPoints(points[i], points[j]);
     }
 }
 
@@ -88,7 +87,7 @@ int isPointSatisfiesCriteria(Point* p, int size, float minimumDistance, int mini
 {
   int count = 0;
   for (int i = 0; i < size; i++)
-    count += p->distances[i]->distance < minimumDistance;
+    count += p->distances[i] < minimumDistance;
   return count >= minimumPoints;
 }
 
