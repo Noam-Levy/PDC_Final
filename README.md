@@ -1,9 +1,9 @@
 ### Problem defenition
 A set of `N` points is placed in a two dimentional plane. The coordinates of each point `P` are defined as follows:
 
-$x=\frac{x_2 - x_1}{2}  \times sin( t \times \frac {\pi}{2}) + \frac {x_2 + x_1}{2}\\$
-$y = a \times x + b\\$
-where $x_1, x_2, a, b$ are constant (float) parameters predifined for each point `P`.
+$x=\frac{x_2 - x_1}{2}  \times sin( t \times \frac {\pi}{2}) + \frac {x_2 + x_1}{2}$<br>
+$y = a \times x + b$<br>
+where $x_1, x_2, a, b$ are constant (double) parameters predifined for each point `P`.
 
 Given a time value `t`, we want to find if there exist at least ***3*** points that satisfies the `Proximity criteria`.<br>
 a point `P` from the set satisfies the criteria if there exist at least `K` points in the set with a distance closer than a given value `D` from the point `P`.<br>
@@ -44,5 +44,8 @@ There were no 3 points found for any t.
 ## How to use - Linux machines
 1. clone the repository and `cd` to its directory.
 2. using `make`, build the code and create the executable file
-3. run using `./prox`. by default, the program will open the `input.txt` file, if you want to open another input file use `./prox <filename>`.
+3. run using `make run`.<br> 
+the project demonstrates distributed parallel computing so it can also be run on two machines.<br>
+in order to do so, add a new file called `ips.txt` with the IP addresses of the machines.<br>
+***both machines have to have be on the same netwrok and have the source code in the same path.***
 4. the program will create the `output.txt` file where you can see the results.
