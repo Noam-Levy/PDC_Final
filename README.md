@@ -46,6 +46,7 @@ There were no 3 points found for any t.
 2. using `make`, build the code and create the executable file
 3. run using `make run`.<br> 
 the project demonstrates distributed parallel computing so it can also be run on two machines.<br>
-in order to do so, add a new file called `ips.txt` with the IP addresses of the machines.<br>
-***both machines have to have be on the same netwrok and have the source code in the same path.***
-4. the program will create the `output.txt` file where you can see the results.
+in order to do so, add a new file called `ips.txt` with the IP addresses of both machines.<br>
+***both machines have to have be on the same netwrok and have the source code in the same path.***<br>
+then use `make run2` to execute the code on both.
+5. the program will create the `output.txt` file where you can see the results.
