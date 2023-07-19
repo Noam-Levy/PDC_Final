@@ -1,5 +1,5 @@
-#include <math.h>
 #include <stdlib.h>
+#include <math.h>
 #include "point.h"
 
 Point* allocatePoint(int distancesSize)
@@ -7,7 +7,7 @@ Point* allocatePoint(int distancesSize)
   Point* p = (Point*)malloc(sizeof(Point));
   if (!p)
     return NULL;
-  p->distances = (float*)malloc(distancesSize * sizeof(float));
+  p->distances = (double*)malloc(distancesSize * sizeof(double));
   if (!p->distances)
   {
     free(p);
@@ -38,3 +38,4 @@ float calculateDistanceBetweenPoints(Point* p1, Point* p2)
   float yDist = pow(p2->y - p1->y, 2);
   return sqrt(xDist + yDist);
 }
+
