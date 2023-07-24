@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include "omp.h"
 #include "util.h"
 
@@ -88,44 +89,38 @@ void calculateDistances(Point** points, int size)
 {
   #pragma omp parallel for
   for (int i = 0; i < size; i++)
+  {
     for (int j = 0; j < size; j++)
-    {
       points[i]->distances[j] = calculateDistanceBetweenPoints(points[i], points[j]);
-    }
+  }
 }
 
 int isPointSatisfiesCriteria(Point* p, int size, float minimumDistance, int minimumPoints)
 {
   int count = 0;
-  #pragma omp parallel for
+  #pragma omp parallel for reduction(+: count)
   for (int i = 0; i < size; i++)
-    count += p->distances[i] < minimumDistance;
+  {
+    double d = p->distances[i];
+    count += d >= 0 && d < minimumDistance; // negative distance indicates distance to self
+  }
   return count >= minimumPoints;
 }
 
-int checkProximityCriteria(Point** points, int size, float minimumDistance, int minimumPoints, float t)
+void checkProximityCriteria(Point **points, int size, float minimumDistance, int minimumPoints, float t, criteria_t* result)
 {
-  int* pointIds = (int*)malloc(MIN_CRITERIA_POINTS * sizeof(int));
-  if (!pointIds)
-  {
-    fprintf(stderr, "Failed allocating IDs array.\n");
-    return -1;
-  }
   int criteriaMetCounter = 0;
   #pragma omp parallel for shared(criteriaMetCounter)
-  for (int i = 0; i < size && criteriaMetCounter < MIN_CRITERIA_POINTS; i++)
-    if (isPointSatisfiesCriteria(points[i], size, minimumDistance, minimumPoints))
-      pointIds[criteriaMetCounter++] = points[i]->id;
-
-  if (criteriaMetCounter >= MIN_CRITERIA_POINTS)
+  for (int i = 0; i < size; i++)
   {
-    printf("Points ");
-    for (int i = 0; i < MIN_CRITERIA_POINTS - 1; i++)
-      printf("%d, ", pointIds[i]);
-    printf("%d satisfy Proximity Criteria at t=%.2f\n", pointIds[MIN_CRITERIA_POINTS - 1], t);
+    if (criteriaMetCounter < MIN_CRITERIA_POINTS && isPointSatisfiesCriteria(points[i], size, minimumDistance, minimumPoints))
+    {
+      #pragma omp critical
+      result->pointIDs[criteriaMetCounter++] = points[i]->id;      
+    }
   }
-  free(pointIds);
-  return criteriaMetCounter;
+  result->t = t;
+  result->isFound = criteriaMetCounter >= MIN_CRITERIA_POINTS;
 }
 
 MPI_Datatype defineMPIDatatype(void* structPtr, int blocklen[], MPI_Datatype blockTypes[], int numElements)

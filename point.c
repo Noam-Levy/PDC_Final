@@ -32,7 +32,7 @@ void setPosition(Point* p, float t)
 float calculateDistanceBetweenPoints(Point* p1, Point* p2)
 {
   if (p1->id == p2->id)
-    return 0;
+    return -1;
 
   float xDist = pow((p2->x - p1->x), 2);
   float yDist = pow(p2->y - p1->y, 2);
