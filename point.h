@@ -1,3 +1,8 @@
+#pragma once
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
+
 typedef struct
 {
   int id;
@@ -5,8 +10,5 @@ typedef struct
   double* distances;
 } Point;
 
-Point *allocatePoint(int distancesSize);
-void deallocatePoint(Point* p);
-void setPosition(Point* p, float t);
-float calculateDistanceBetweenPoints(Point* p1, Point* p2);
-
+void setPosition(Point* p, double t);
+double calculateDistanceBetweenPoints(Point* p1, Point* p2);

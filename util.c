@@ -1,146 +1,102 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <math.h>
-#include "omp.h"
 #include "util.h"
 
-int readPoints(FILE* file, Point** points, int size)
-{
-  int i;
-  for (i = 0; i < size; ++i)
-  {
-    Point *p = allocatePoint(size);
-    if (!p)
-      break;
-
-    fscanf(file, "%d %lf %lf %lf %lf\n", &p->id, &p->x1, &p->x2, &p->a, &p->b);
-    points[i] = p;
-  }
-  return i;
-}
-
-metadata* readData(char* path)
+Point* readData(char* path, int* N, int* K, double* D, int* tCount)
 {
   FILE* f;
+  int i, j;
   f = fopen(path, "r"); // open file in read mode
   if (f == NULL)
   {
     fprintf(stderr, "Cannot open file: %s\n", path);
     return NULL;
   }
-  metadata* data = (metadata*)malloc(sizeof(metadata));
-  if (data == NULL)
+
+  if (fscanf(f, "%d %d %lf %d\n", N, K, D, tCount) != 4)
   {
-    fprintf(stderr, "Unable to allocate memory for metadata\n");
+    fprintf(stderr, "Failed reading metadata from file\n");
     fclose(f);
     return NULL;
   }
 
-  fscanf(f, "%d %d %f %d\n", &data->N, &data->K, &data->D, &data->tCount);
-  data->points = (Point**)malloc(data->N * sizeof(Point));
-  if (data->points == NULL)
+  Point* points = (Point*)malloc(*N * sizeof(Point));
+  if (!points)
   {
     fprintf(stderr, "Unable to allocate memory for points data\n");
-    free(data);
     fclose(f);
     return NULL;
   }
-  int allocatedPoints = readPoints(f, data->points, data->N);
-  if (allocatedPoints != data->N)
+  for (i = 0; i < *N; i++)
   {
-    fprintf(stderr, "Unable to allocate memory for points data\n");
-    for (int i = 0; i < allocatedPoints; i++)
-      deallocatePoint(data->points[i]);           
-    
-    free(data->points);
-    free(data);
-    fclose(f);
-    return NULL;
+    j = fscanf(f, "%d %lf %lf %lf %lf\n", &points[i].id, &points[i].x1, &points[i].x2, &points[i].a, &points[i].b);
+    points[i].distances = (double*)malloc(*N * sizeof(double));
+    if (j != 5 || !points[i].distances)
+    {
+      if (j != 5)
+        fprintf(stderr, "Unable to read point %d data\n", i);
+      else
+        fprintf(stderr, "Failed allocating distances array for point %d\n", i);
+
+      for (j = 0; j < i; j++)
+        free(points[i].distances);
+      free(points);
+      fclose(f);
+      return NULL;
+    }
   }
 
   fclose(f);
-  return data;
-}
-
-void deallocateMetadata(metadata* data)
-{
-  #pragma omp parallel for
-  for(int i = 0; i < data->N; i++)
-    deallocatePoint(data->points[i]);
-  free(data->points);
-  free(data);
+  return points;
 }
 
 void calculateTimes(double* timesArr, int low, int high, int tCount)
 {
   #pragma omp parallel for
-  for (int i = low; i <= high; i++)
-    timesArr[i] = 2.0 * i / tCount - 1;
+  for (int i = low; i < high; i++)
+    timesArr[i - low] = 2.0 * i / tCount - 1;
 }
 
-void setPointsPositions(Point** points, int size, float t)
+void setPointsPositions(Point* points, int size, double t)
 {
   #pragma omp parallel for
   for (int i = 0; i < size; i++)
-    setPosition(points[i], t);
+    setPosition(&points[i], t);
 }
 
-void calculateDistances(Point** points, int size)
+void calculateDistances(Point* points, int size)
 {
   #pragma omp parallel for
   for (int i = 0; i < size; i++)
   {
     for (int j = 0; j < size; j++)
-      points[i]->distances[j] = calculateDistanceBetweenPoints(points[i], points[j]);
-  }
+    {
+      points[i].distances[j] = calculateDistanceBetweenPoints(&points[i], &points[j]);
+    }
 }
 
-int isPointSatisfiesCriteria(Point* p, int size, float minimumDistance, int minimumPoints)
+int isPointSatisfiesCriteria(Point* p, int size, double minimumDistance, int minimumPoints)
 {
   int count = 0;
   #pragma omp parallel for reduction(+: count)
   for (int i = 0; i < size; i++)
   {
-    double d = p->distances[i];
-    count += d >= 0 && d < minimumDistance; // negative distance indicates distance to self
+    double dist = p->distances[i];
+    count += dist >= 0 && dist < minimumDistance; // negative distance indicates distance to self
   }
   return count >= minimumPoints;
 }
 
-void checkProximityCriteria(Point **points, int size, float minimumDistance, int minimumPoints, float t, criteria_t* result)
+void checkProximityCriteria(Point* points, int size, double minimumDistance, int minimumPoints, double t, criteria_t* result)
 {
   int criteriaMetCounter = 0;
   #pragma omp parallel for shared(criteriaMetCounter)
   for (int i = 0; i < size; i++)
-  {
-    if (criteriaMetCounter < MIN_CRITERIA_POINTS && isPointSatisfiesCriteria(points[i], size, minimumDistance, minimumPoints))
+    if (criteriaMetCounter < MIN_CRITERIA_POINTS && isPointSatisfiesCriteria(&points[i], size, minimumDistance, minimumPoints))
     {
       #pragma omp critical
-      result->pointIDs[criteriaMetCounter++] = points[i]->id;      
+      result->pointIDs[criteriaMetCounter++] = points[i].id;
     }
-  }
+
   result->t = t;
   result->isFound = criteriaMetCounter >= MIN_CRITERIA_POINTS;
-}
-
-MPI_Datatype defineMPIDatatype(void* structPtr, int blocklen[], MPI_Datatype blockTypes[], int numElements)
-{
-  MPI_Datatype newType;
-  MPI_Aint* displacements = (MPI_Aint*)malloc(numElements * sizeof(MPI_Aint));
-
-  // calculate displacements of each member in the struct and adjust relative to base address
-  #pragma omp parallel for
-  for (int i = 0; i < numElements; i++)
-  {
-    MPI_Get_address((char*)structPtr + i * sizeof(MPI_Aint), &displacements[i]);
-    displacements[i] -= (MPI_Aint)structPtr;
-  }
-
-  // create struct and commit datatype
-  MPI_Type_create_struct(numElements, blocklen, displacements, blockTypes, &newType);
-  MPI_Type_commit(&newType);
-  
-  free(displacements);
-  return newType;
 }
 

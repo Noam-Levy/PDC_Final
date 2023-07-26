@@ -1,160 +1,170 @@
-#include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <mpi.h>
 #include <math.h>
 #include "util.h"
-
-#define STR_MAX 255
 
 void main(int argc, char* argv[])
 {
   int nProc, rank, chunk, i;
   double* timesArr;
   char filename[STR_MAX];
-  metadata* data;
-  criteria_t** results;
+  int N, K, tCount, nProc, rank, chunk, remainder, startIndex, endIndex, i;
+  double D, t, *timesArr;
+  FILE* output;
+  Point* points;
+  criteria_t* localResults, *globalResults;
   MPI_Status status;
 
   MPI_Init(&argc, &argv);
   MPI_Comm_size(MPI_COMM_WORLD, &nProc);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  if (rank == MASTER && nProc != 2)
+  if (rank == MASTER && nProc < 2)
   {
-    fprintf(stderr, "Please run the program with 2 processes only\n");
+    fprintf(stderr, "Please run the program with at least 2 processes\n");
     MPI_Abort(MPI_COMM_WORLD, __LINE__);
   }
 
-  //define MPI datatypes
-  metadata md;
-  int md_blockLength[5] = {1, 1, 1, 1, 0};
-  MPI_Datatype md_blockTypes[5] = {MPI_INT, MPI_DOUBLE, MPI_INT, MPI_INT, MPI_UB};
-  MPI_Datatype MPI_metadata = defineMPIDatatype(&md, md_blockLength, md_blockTypes, 5);
-
-  Point pt;
-  int point_blockLength[8] = {1, 1, 1, 1, 1, 1, 1, 0};
-  MPI_Datatype point_blockTypes[8] = {MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_INT, MPI_UB};
-  MPI_Datatype MPI_point = defineMPIDatatype(&pt, point_blockLength, point_blockTypes, 8);
+  // define MPI_POINT datatype
+  MPI_Datatype MPI_POINT;
+  MPI_Type_contiguous(sizeof(Point), MPI_BYTE, &MPI_POINT);
+  MPI_Type_commit(&MPI_POINT);
 
   if (rank == MASTER)
   {
     argc < 2 ? strcpy(filename, "./input.txt") : strcpy(filename, argv[1]);
-    // route stdout to output file
-    FILE* output = freopen("output.txt", "w", stdout);
-    if (output == NULL)
-    {
-        fprintf(stderr, "Failed to route stdout to output file. Aborting...\n");
-        deallocateMetadata(data);
-        return;
-    }
-
-    data = readData(filename);
-    if (!data)
-    {
-      fprintf(stderr, "Failed reading data from file. Terminating...\n");
-      return;
-    }
-
-    MPI_Send(data, 1, MPI_metadata, 1, TAG, MPI_COMM_WORLD);
-    for (i = 0; i < data->N; i++)
-      MPI_Send(data->points[i], 1, MPI_point, 1, TAG, MPI_COMM_WORLD);
-  }
-  else // Slave process
-  {
-    data = (metadata*)malloc(sizeof(metadata));
-    MPI_Recv(data, 1, MPI_metadata, MASTER, TAG, MPI_COMM_WORLD, &status);
-    data->points = (Point**)malloc(data->N * sizeof(Point*));
-    for (i = 0; i < data->N; i++)
-    {
-      data->points[i] = allocatePoint(data->N);
-      MPI_Recv(data->points[i], 1, MPI_point, MASTER, TAG, MPI_COMM_WORLD, &status);
-    }
-  }
-
-  // calculate t values and share with other process
-  chunk = (int)(floor(data->tCount / nProc) + ((data->tCount % nProc) * !rank)); // master process recieves bigger chunk
-  timesArr = (double*)malloc((data->tCount + 1) * sizeof(double));
-  results = (criteria_t**)malloc((data->tCount + 1) * sizeof(criteria_t*));
-  if (!timesArr || !results)
-  {
-    fprintf(stderr, "Failed allocating memory on process %d\nAborting...", rank);
-    MPI_Abort(MPI_COMM_WORLD, __LINE__);
-  }
-  for (i = 0; i <= data->tCount; i++)
-  {
-    results[i] = (criteria_t*)malloc(sizeof(criteria_t));
-    if (!results[i])
-    {
-      fprintf(stderr, "Failed allocating memory on process %d\nAborting...", rank);
-      MPI_Abort(MPI_COMM_WORLD, __LINE__);
-    }
-  }
   
-  int lower = chunk * rank, 
-      upper = data->tCount - chunk + lower,
-      offset = rank != 0 ? 0 : upper;
-  calculateTimes(timesArr, lower, upper, data->tCount);
-  MPI_Sendrecv(timesArr + lower, chunk, MPI_DOUBLE, !rank, TAG, timesArr + offset, data->tCount - chunk, MPI_DOUBLE, !rank, TAG, MPI_COMM_WORLD, &status);
+    points = readData(filename, &N, &K, &D, &tCount);
+    if (!points)
+    {
+      fprintf(stderr, "Terminating...\n");
+      MPI_Abort(MPI_COMM_WORLD, __LINE__);
+    }
+    globalResults = (criteria_t*)malloc((tCount + 1) * sizeof(criteria_t));
+    if (!globalResults)
+    {
+      fprintf(stderr, "Faild allocating global results array. Terminating...\n");
+      MPI_Abort(MPI_COMM_WORLD, __LINE__);      
+    }
+    // route stdout to output file
+    output = freopen("output.txt", "w", stdout);
+    if (output == NULL) // route stdout to output file
+    {
+      fprintf(stderr, "Failed to route stdout to output file. Aborting...\n");
+      MPI_Abort(MPI_COMM_WORLD, __LINE__);
+    }
+  }
 
-  for (i = lower; i <= upper; i++)
+  // broadcast metadata data
+  MPI_Bcast(&N, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+  MPI_Bcast(&K, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+  MPI_Bcast(&D, 1, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+  MPI_Bcast(&tCount, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+  // send points
+  if (rank == MASTER)
   {
-    double t = timesArr[i];
-    setPointsPositions(data->points, data->N, t);
-    calculateDistances(data->points, data->N);
-    checkProximityCriteria(data->points, data->N, data->D, data->K, t, results[i]);
-    if (results[i] == NULL) // error while checking proximity criteria. error message will be printed by the check function.
+    #pragma omp parallel for
+    for (i = 1; i < nProc; i++)
+      MPI_Send(points, N, MPI_POINT, i, TAG, MPI_COMM_WORLD);
+  }
+  else
+  {
+    // allocate points array in slave processes
+    points = (Point*)malloc(N * sizeof(Point));
+    if (!points)
+    {
+      fprintf(stderr, "Failed to allocate points array in process %d. Aborting...\n", rank);
+      MPI_Abort(MPI_COMM_WORLD, __LINE__);
+    }
+    // recieve points array from master
+    MPI_Recv(points, N, MPI_POINT, MASTER, TAG, MPI_COMM_WORLD, &status);
+    #pragma omp parallel for
+    for (i = 0; i < N; i++)
+    {
+      points[i].distances = (double*)malloc(N * sizeof(double));
+      if (!points[i].distances)
+      {
+        fprintf(stderr, "Failed to allocate distances array for point %d in process %d. Aborting...\n", points[i].id, rank);
+        MPI_Abort(MPI_COMM_WORLD, __LINE__);        
+      }
+    }
+  }
+
+  chunk = (tCount + 1) / nProc;
+  remainder = (tCount + 1) % nProc;
+  startIndex = chunk * rank;
+  endIndex = startIndex + chunk + remainder;
+  // if applicable, allocate remainder to master and offset slaves accordingly
+  if (rank == MASTER)
+    chunk += remainder;  
+  else
+    startIndex += remainder;
+
+  timesArr = (double*)malloc(chunk * sizeof(double));
+  localResults = (criteria_t*)malloc(chunk * sizeof(criteria_t));
+  if (!timesArr || !localResults)
+  {
+      fprintf(stderr, "Failed allocating memory in process %d. Aborting...\n", rank);
+      MPI_Abort(MPI_COMM_WORLD, __LINE__);    
+  }
+ 
+  calculateTimes(timesArr, startIndex, endIndex, tCount);
+  for (i = 0; i < chunk; i++)
+  {
+    t = timesArr[i];
+    setPointsPositions(points, N, t);
+    calculateDistances(points, N);
+    checkProximityCriteria(points, N, D, K, t, &localResults[i]);
+    if (!&localResults[i]) // error while checking proximity criteria. error message is printed by the check function.
       MPI_Abort(MPI_COMM_WORLD, __LINE__);
   }
+    
   MPI_Barrier(MPI_COMM_WORLD);
-  if (rank != MASTER) // slave sends to master its results
+  if (rank != MASTER) // slaves sends to master results
   {
-    for (i = lower; i <= upper; i++)
+    for (i = 0; i < chunk; i++)
     {
-      criteria_t* res = results[i];
-      MPI_Send(&res->t, 1, MPI_DOUBLE, MASTER, TAG, MPI_COMM_WORLD);
-      MPI_Send(&res->isFound, 1, MPI_INT, MASTER, TAG, MPI_COMM_WORLD);
-      if (res->isFound)
-        MPI_Send(res->pointIDs, 3, MPI_INT, MASTER, TAG, MPI_COMM_WORLD);
-      free(res);
+      criteria_t res = localResults[i];
+      MPI_Send(&res.t, 1, MPI_DOUBLE, MASTER, TAG, MPI_COMM_WORLD);
+      MPI_Send(&res.isFound, 1, MPI_INT, MASTER, TAG, MPI_COMM_WORLD);
+      if (res.isFound)
+        MPI_Send(&res.pointIDs, MIN_CRITERIA_POINTS, MPI_INT, MASTER, TAG, MPI_COMM_WORLD);
     }
   }
   else
   {
-    for (i = chunk; i <= data->tCount; i++)
-    {
-      criteria_t* res = results[i];
-      MPI_Recv(&res->t, 1, MPI_DOUBLE, 1, TAG, MPI_COMM_WORLD, &status);
-      MPI_Recv(&res->isFound, 1, MPI_INT, 1, TAG, MPI_COMM_WORLD, &status);
-      if (res->isFound)
-        MPI_Recv(res->pointIDs, 3, MPI_INT, 1, TAG, MPI_COMM_WORLD, &status);
-    }
-    
+    memcpy(globalResults, localResults, chunk * sizeof(criteria_t));
     int found = 0;
-    # pragma omp parallel for ordered shared(found)
-    for (i = 0; i <= data->tCount; i++)
+    for (i = 0; i <= tCount; i++)
     {
-      criteria_t* res = results[i];
-      #pragma omp ordered
-      if (res->isFound)
+      criteria_t res = globalResults[i];
+      if (i > chunk)
+      {
+        MPI_Recv(&res.t, 1, MPI_DOUBLE, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(&res.isFound, 1, MPI_INT, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
+        if (res.isFound)
+          MPI_Recv(&res.pointIDs, MIN_CRITERIA_POINTS, MPI_INT, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
+      }
+      if (res.isFound)
       {
         printf("Points ");
         for (int j = 0; j < MIN_CRITERIA_POINTS - 1; j++)
-          printf("%d, ", res->pointIDs[j]);
-        printf("%d satisfy Proximity Criteria at t=%.2f\n", res->pointIDs[MIN_CRITERIA_POINTS - 1], res->t);
+          printf("%d, ", res.pointIDs[j]);
+        printf("%d satisfy Proximity Criteria at t=%.2f\n", res.pointIDs[MIN_CRITERIA_POINTS - 1], res.t);
         found = 1;
       }
-      free(res);
     }
-    if (found == 0)
-    {
-      printf("There were no %d points found for any t.\n", MIN_CRITERIA_POINTS);
-    }
-  }
 
-  deallocateMetadata(data);
-  free(results);
-  MPI_Type_free(&MPI_point);
-  MPI_Type_free(&MPI_metadata);
+    if (found == 0)
+      printf("There were no %d points found for any t.\n", MIN_CRITERIA_POINTS);
+    free(globalResults);
+  }
+ 
+  MPI_Type_free(&MPI_POINT);
+  for (i = 0; i < N; i++)
+    free(points[i].distances);
+  free(points);
+  free(timesArr);
+  free(localResults);
   MPI_Finalize();
 }
