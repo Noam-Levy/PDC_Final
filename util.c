@@ -2,96 +2,78 @@
 #include <stdio.h>
 #include "util.h"
 
-int readPoints(FILE* file, Point** points, int size)
-{
-  int i;
-  for (i = 0; i < size; ++i)
-  {
-    Point *p = allocatePoint(size);
-    if (!p)
-      break;
-
-    fscanf(file, "%d %f %f %f %f\n", &p->id, &p->x1, &p->x2, &p->a, &p->b);
-    points[i] = p;
-  }
-  return i;
-}
-
-metadata* readData(char* path)
+Point* readData(char* path, int* N, int* K, double* D, int* tCount)
 {
   FILE* f;
+  int i, j;
   f = fopen(path, "r"); // open file in read mode
   if (f == NULL)
   {
     fprintf(stderr, "Cannot open file: %s\n", path);
     return NULL;
   }
-  metadata* data = (metadata*)malloc(sizeof(metadata));
-  if (data == NULL)
+  if (fscanf(f, "%d %d %lf %d\n", N, K, D, tCount) != 4)
   {
-    fprintf(stderr, "Unable to allocate memory for metadata\n");
+    fprintf(stderr, "Failed reading metadata from file\n");
     fclose(f);
     return NULL;
   }
-
-  fscanf(f, "%d %d %f %d\n", &data->N, &data->K, &data->D, &data->tCount);
-  data->points = (Point**)malloc(data->N * sizeof(Point*));
-  if (data->points == NULL)
+  Point* points = (Point*)malloc(*N * sizeof(Point));
+  if (!points)
   {
     fprintf(stderr, "Unable to allocate memory for points data\n");
-    free(data);
     fclose(f);
     return NULL;
   }
-  int allocatedPoints = readPoints(f, data->points, data->N);
-  if (allocatedPoints != data->N)
+  for (i = 0; i < *N; i++)
   {
-    fprintf(stderr, "Unable to allocate memory for points data\n");
-    for (int i = 0; i < allocatedPoints; i++)
-      deallocatePoint(data->points[i]);           
-    
-    free(data->points);
-    free(data);
-    fclose(f);
-    return NULL;
-  }
+    j = fscanf(f, "%d %lf %lf %lf %lf\n", &points[i].id, &points[i].x1, &points[i].x2, &points[i].a, &points[i].b);
+    points[i].distances = (double*)malloc(*N * sizeof(double));
+    if (j != 5 || !points[i].distances)
+    {
+      if (j != 5)
+        fprintf(stderr, "Unable to read point %d data\n", i);
+      else
+        fprintf(stderr, "Failed allocating distances array for point %d\n", i);
 
+      for (j = 0; j < i; j++)
+        free(points[i].distances);
+      free(points);
+      fclose(f);
+      return NULL;
+    }
+  }
   fclose(f);
-  return data;
+  return points;
 }
 
-void deallocateMetadata(metadata *data)
-{
-  for(int i = 0; i < data->N; i++)
-    deallocatePoint(data->points[i]);
-  free(data->points);
-  free(data);
-}
-
-void setPointsPositions(Point** points, int size, float t)
+void setPointsPositions(Point* points, int size, double t)
 {
   for (int i = 0; i < size; i++)
-    setPosition(points[i], t);
+    setPosition(&points[i], t);
 }
 
-void calculateDistances(Point** points, int size)
+void calculateDistances(Point* points, int size)
 {
   for (int i = 0; i < size; i++)
     for (int j = 0; j < size; j++)
     {
-      points[i]->distances[j] = calculateDistanceBetweenPoints(points[i], points[j]);
+      points[i].distances[j] = calculateDistanceBetweenPoints(&points[i], &points[j]);
     }
 }
 
-int isPointSatisfiesCriteria(Point* p, int size, float minimumDistance, int minimumPoints)
+int isPointSatisfiesCriteria(Point* p, int size, double minimumDistance, int minimumPoints)
 {
   int count = 0;
   for (int i = 0; i < size; i++)
-    count += p->distances[i] < minimumDistance;
+  {
+    double dist = p->distances[i];
+    count += dist >= 0 && dist < minimumDistance; // negative distance indicates distance to self
+  }
   return count >= minimumPoints;
 }
 
-int checkProximityCriteria(Point** points, int size, float minimumDistance, int minimumPoints, float t)
+int checkProximityCriteria(Point* points, int size, double minimumDistance, int minimumPoints, double t)
 {
   int* pointIds = (int*)malloc(MIN_CRITERIA_POINTS * sizeof(int));
   if (!pointIds)
@@ -101,8 +83,8 @@ int checkProximityCriteria(Point** points, int size, float minimumDistance, int 
   }
   int criteriaMetCounter = 0;
   for (int i = 0; i < size && criteriaMetCounter < MIN_CRITERIA_POINTS; i++)
-    if (isPointSatisfiesCriteria(points[i], size, minimumDistance, minimumPoints))
-      pointIds[criteriaMetCounter++] = points[i]->id;
+    if (isPointSatisfiesCriteria(&points[i], size, minimumDistance, minimumPoints))
+      pointIds[criteriaMetCounter++] = points[i].id;
 
   if (criteriaMetCounter >= MIN_CRITERIA_POINTS)
   {
