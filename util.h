@@ -1,4 +1,4 @@
-#pragma once
+#include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
 #include <omp.h>
@@ -20,4 +20,3 @@ void calculateTimes(double* timesArr, int low, int high, int tCount);
 void setPointsPositions(Point* points, int size, double t);
 void calculateDistances(Point* points, int size);
 void checkProximityCriteria(Point* points, int size, double minimumDistance, int minimumPoints, double t, criteria_t* result);
-

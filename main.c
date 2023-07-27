@@ -1,16 +1,12 @@
 #include <string.h>
-#include <mpi.h>
-#include <math.h>
 #include "util.h"
 
 void main(int argc, char* argv[])
 {
-  int nProc, rank, chunk, i;
-  double* timesArr;
+  FILE* output;
   char filename[STR_MAX];
   int N, K, tCount, nProc, rank, chunk, remainder, startIndex, endIndex, i;
-  double D, t, *timesArr;
-  FILE* output;
+  double *timesArr, D, t, startTime, endTime;
   Point* points;
   criteria_t* localResults, *globalResults;
   MPI_Status status;
@@ -33,7 +29,7 @@ void main(int argc, char* argv[])
   if (rank == MASTER)
   {
     argc < 2 ? strcpy(filename, "./input.txt") : strcpy(filename, argv[1]);
-  
+    startTime = MPI_Wtime();
     points = readData(filename, &N, &K, &D, &tCount);
     if (!points)
     {
@@ -157,6 +153,10 @@ void main(int argc, char* argv[])
 
     if (found == 0)
       printf("There were no %d points found for any t.\n", MIN_CRITERIA_POINTS);
+    
+    // print execution time to console.
+    endTime = MPI_Wtime();
+    fprintf(stderr, "Execution time: %.4f seconds\n", endTime - startTime);
     free(globalResults);
   }
  

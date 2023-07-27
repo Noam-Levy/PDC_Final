@@ -1,3 +1,5 @@
 .vscode
 *.btr
-output.txt
+*.txt
+proximity
+

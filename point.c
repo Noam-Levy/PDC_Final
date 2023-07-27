@@ -15,4 +15,3 @@ double calculateDistanceBetweenPoints(Point* p1, Point* p2)
   float yDist = pow(p2->y - p1->y, 2);
   return sqrt(xDist + yDist);
 }
-

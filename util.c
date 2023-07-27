@@ -68,9 +68,8 @@ void calculateDistances(Point* points, int size)
   for (int i = 0; i < size; i++)
   {
     for (int j = 0; j < size; j++)
-    {
       points[i].distances[j] = calculateDistanceBetweenPoints(&points[i], &points[j]);
-    }
+  }
 }
 
 int isPointSatisfiesCriteria(Point* p, int size, double minimumDistance, int minimumPoints)
@@ -99,4 +98,3 @@ void checkProximityCriteria(Point* points, int size, double minimumDistance, int
   result->t = t;
   result->isFound = criteriaMetCounter >= MIN_CRITERIA_POINTS;
 }
-
