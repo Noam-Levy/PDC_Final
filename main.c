@@ -1,12 +1,13 @@
 #include <string.h>
+#include <mpi.h>
 #include "util.h"
 
-void main(int argc, char* argv[])
+int main(int argc, char* argv[])
 {
   FILE* output;
   char filename[STR_MAX];
   int N, K, tCount, nProc, rank, chunk, remainder, startIndex, endIndex, i;
-  double *timesArr, D, t, startTime, endTime;
+  double D, t, startTime, endTime, *timesArr;
   Point* points;
   criteria_t* localResults, *globalResults;
   MPI_Status status;
@@ -74,48 +75,30 @@ void main(int argc, char* argv[])
     }
     // recieve points array from master
     MPI_Recv(points, N, MPI_POINT, MASTER, TAG, MPI_COMM_WORLD, &status);
-    #pragma omp parallel for
-    for (i = 0; i < N; i++)
-    {
-      points[i].distances = (double*)malloc(N * sizeof(double));
-      if (!points[i].distances)
-      {
-        fprintf(stderr, "Failed to allocate distances array for point %d in process %d. Aborting...\n", points[i].id, rank);
-        MPI_Abort(MPI_COMM_WORLD, __LINE__);        
-      }
-    }
   }
 
   chunk = (tCount + 1) / nProc;
   remainder = (tCount + 1) % nProc;
   startIndex = chunk * rank;
   endIndex = startIndex + chunk + remainder;
-  // if applicable, allocate remainder to master and offset slaves accordingly
+  // if applicable, allocate remainder tasks to master and offset slaves accordingly
   if (rank == MASTER)
     chunk += remainder;  
   else
     startIndex += remainder;
-
-  timesArr = (double*)malloc(chunk * sizeof(double));
+   
   localResults = (criteria_t*)malloc(chunk * sizeof(criteria_t));
-  if (!timesArr || !localResults)
+  timesArr = (double*)malloc(chunk * sizeof(double));
+  if (!localResults | !timesArr)
   {
       fprintf(stderr, "Failed allocating memory in process %d. Aborting...\n", rank);
       MPI_Abort(MPI_COMM_WORLD, __LINE__);    
   }
- 
-  calculateTimes(timesArr, startIndex, endIndex, tCount);
-  for (i = 0; i < chunk; i++)
-  {
-    t = timesArr[i];
-    setPointsPositions(points, N, t);
-    calculateDistances(points, N);
-    checkProximityCriteria(points, N, D, K, t, &localResults[i]);
-    if (!&localResults[i]) // error while checking proximity criteria. error message is printed by the check function.
-      MPI_Abort(MPI_COMM_WORLD, __LINE__);
-  }
-    
+  
+  calculateTimes(timesArr, startIndex, endIndex, tCount); // calculate process' allocated times
+  computeProximities(points, N, timesArr, localResults, chunk, tCount, D, K);  
   MPI_Barrier(MPI_COMM_WORLD);
+  
   if (rank != MASTER) // slaves sends to master results
   {
     for (i = 0; i < chunk; i++)
@@ -161,10 +144,7 @@ void main(int argc, char* argv[])
   }
  
   MPI_Type_free(&MPI_POINT);
-  for (i = 0; i < N; i++)
-    free(points[i].distances);
   free(points);
-  free(timesArr);
   free(localResults);
   MPI_Finalize();
 }
