@@ -22,4 +22,4 @@ typedef struct
 
 Point* readData(char* path, int* N, int* K, double* D, int* tCount);
 void calculateTimes(double *timesArr, int low, int high, int tCount);
-void computeProximities(Point *h_points, int size, double* h_times, criteria_t *h_results, int chunk, int tCount, double minimumDistance, int minimumPoints);
+void computeProximities(Point *h_points, int size, double* h_times, criteria_t *h_results, int chunk, double minimumDistance, int minimumPoints);
