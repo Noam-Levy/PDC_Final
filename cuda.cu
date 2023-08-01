@@ -3,7 +3,6 @@
 
 #define THREADS_PER_BLOCK 256
 
-__device__ int lock = 0;
 __device__ int criteriaMetCounter = 0;
 
 void checkError(cudaError_t err, int lineNum)
@@ -15,16 +14,6 @@ void checkError(cudaError_t err, int lineNum)
   }
 }
 
-__device__ void aquireLock()
-{
-  while (atomicCAS(&lock, 0, 1) != 0);
-}
-
-__device__ void releaseLock()
-{
-  atomicExch(&lock, 0);
-}
-
 __device__ double calculateDistanceBetweenPoints(Point* p1, Point* p2)
 {
   if (p1->id == p2->id)
@@ -34,7 +23,6 @@ __device__ double calculateDistanceBetweenPoints(Point* p1, Point* p2)
   float yDist = pow(p2->y - p1->y, 2);
   return sqrt(xDist + yDist);
 }
-
 
 __device__ int isPointSatisfiesCriteria(Point* ref, Point* points, int size, double minimumDistance, int minimumPoints)
 {
@@ -50,9 +38,16 @@ __device__ int isPointSatisfiesCriteria(Point* ref, Point* points, int size, dou
   return count >= minimumPoints;
 }
 
-__global__ void setCriteriaMetCounter(int value)
+__device__ void resetCriteriaMetCounter()
 {
-  criteriaMetCounter = value;
+  criteriaMetCounter = 0;
+}
+
+__global__ void setResultMetadata(criteria_t* res, double t)
+{
+  res->t = t;
+  res->isFound = criteriaMetCounter >= MIN_CRITERIA_POINTS;
+  resetCriteriaMetCounter();
 }
 
 __global__ void setPointsPositions(Point *points, int size, double t)
@@ -69,65 +64,21 @@ __global__ void setPointsPositions(Point *points, int size, double t)
 __global__ void checkProximityCriteria(Point *points, int size, double t, double minimumDistance, int minimumPoints, criteria_t* result)
 {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid > size)
+  if (tid > size || atomicAdd(&criteriaMetCounter, 0)  >= MIN_CRITERIA_POINTS)
     return;
   
   if (isPointSatisfiesCriteria(&points[tid], points, size, minimumDistance, minimumPoints))
   {
-    // aquireLock();
-    if(criteriaMetCounter < MIN_CRITERIA_POINTS)
-    {
-      result->pointIDs[criteriaMetCounter++] = points[tid].id;
-      printf("%d satisfies criteria at %.2f. counter=%d\n", points[tid].id, t, criteriaMetCounter);
-    }
-    // releaseLock();
-  }
-
-  if (criteriaMetCounter >= MIN_CRITERIA_POINTS)
-  {
-    // aquireLock();
-    if (!result->isFound)
-    {
-      result->isFound = 1;
-      result->t = t;
-    }
-    // releaseLock();
+    int counter = atomicAdd(&criteriaMetCounter, 1); // counter recieves the previous value of criteriaMetCounter.
+    if (counter < MIN_CRITERIA_POINTS)
+      result->pointIDs[counter] = points[tid].id;
   }
 }
 
-__global__ void printPoints(Point* points, int size)
-{
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i > size)
-    return;
-  
-  printf("P[%d]: x=%.2f y=%.2f\n", points[i].id, points[i].x, points[i].y);
-}
-
-__global__ void printResults(criteria_t *results, int size)
-{
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i > size)
-    return;
-
-  criteria_t res = results[i];
-  if (res.isFound)
-  {
-    printf("Points ");
-    for (int j = 0; j < MIN_CRITERIA_POINTS - 1; j++)
-      printf("%d, ", res.pointIDs[j]);
-    printf("%d satisfy Proximity Criteria at t=%.2lf\n", res.pointIDs[MIN_CRITERIA_POINTS - 1], res.t);
-  }
-  else
-  {
-    printf("No joy at t=%.2f\n", res.t);
-  }
-}
-
-void computeProximities(Point *h_points, int size, double* h_times, criteria_t *h_results, int chunk, int tCount, double minimumDistance, int minimumPoints)
+void computeProximities(Point *h_points, int size, double* h_times, criteria_t *h_results, int chunk, double minimumDistance, int minimumPoints)
 {
   cudaError_t err;
-  int i, offset;
+  int i, blocks;
 
   // allocate device memory
   Point *d_points;
@@ -142,10 +93,10 @@ void computeProximities(Point *h_points, int size, double* h_times, criteria_t *
   err = cudaMemcpy(d_points, h_points, size * sizeof(Point), cudaMemcpyHostToDevice);
   checkError(err, __LINE__ - 1);
   
-  int blocks = (int)floor((size * chunk) / THREADS_PER_BLOCK) + 1; // +1 handles case where size * chunk < THREADS_PER_BLOCK
+  blocks = (int)floor((size * chunk) / THREADS_PER_BLOCK) + 1; // +1 handles case where size * chunk < THREADS_PER_BLOCK
+
   for (i = 0; i < chunk; i++)
   {
-    setCriteriaMetCounter<<<1, 1>>>(0);
     double t = h_times[i];
     
     setPointsPositions<<<blocks, THREADS_PER_BLOCK>>>(d_points, size, t);
@@ -153,9 +104,11 @@ void computeProximities(Point *h_points, int size, double* h_times, criteria_t *
     
     checkProximityCriteria<<<blocks, THREADS_PER_BLOCK>>>(d_points, size, t, minimumDistance, minimumPoints, &d_results[i]);
     checkError(cudaGetLastError(), __LINE__ - 1);
+    
+    setResultMetadata<<<1, 1>>>(&d_results[i], t);
+    checkError(cudaGetLastError(), __LINE__ - 1);
+    cudaDeviceSynchronize(); // wait for all threads to finish with current timestamp
   }
-  cudaDeviceSynchronize();
-
   // copy results to host
   err = cudaMemcpy(h_results, d_results, chunk * sizeof(criteria_t), cudaMemcpyDeviceToHost);
   checkError(err, __LINE__ - 1);

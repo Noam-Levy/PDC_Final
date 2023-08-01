@@ -96,7 +96,7 @@ int main(int argc, char* argv[])
   }
   
   calculateTimes(timesArr, startIndex, endIndex, tCount); // calculate process' allocated times
-  computeProximities(points, N, timesArr, localResults, chunk, tCount, D, K);  
+  computeProximities(points, N, timesArr, localResults, chunk, D, K);  
   MPI_Barrier(MPI_COMM_WORLD);
   
   if (rank != MASTER) // slaves sends to master results
@@ -117,7 +117,7 @@ int main(int argc, char* argv[])
     for (i = 0; i <= tCount; i++)
     {
       criteria_t res = globalResults[i];
-      if (i > chunk)
+      if (i >= chunk)
       {
         MPI_Recv(&res.t, 1, MPI_DOUBLE, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
         MPI_Recv(&res.isFound, 1, MPI_INT, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
