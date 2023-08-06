@@ -21,5 +21,5 @@ typedef struct
 } Point;
 
 Point* readData(char* path, int* N, int* K, double* D, int* tCount);
-void calculateTimes(double *timesArr, int low, int high, int tCount);
-void computeProximities(Point *h_points, int size, double* h_times, criteria_t *h_results, int chunk, double minimumDistance, int minimumPoints);
+void calculateTimes(criteria_t *results, int low, int high, int tCount);
+void computeProximities(Point *h_points, int size, criteria_t *h_results, int chunk, double minimumDistance, int minimumPoints);

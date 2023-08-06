@@ -40,9 +40,8 @@ __device__ void resetCriteriaMetCounter()
   atomicExch(&criteriaMetCounter, 0);
 }
 
-__global__ void setResultMetadata(criteria_t* res, double t)
+__global__ void setResultMetadata(criteria_t* res)
 {
-  res->t = t; 
   res->isFound = criteriaMetCounter >= MIN_CRITERIA_POINTS;
   resetCriteriaMetCounter();
 }
@@ -85,7 +84,7 @@ __global__ void checkProximityCriteria(Point *points, int size, double t, double
   }
 }
 
-void computeProximities(Point *h_points, int size, double* h_times, criteria_t *h_results, int chunk, double minimumDistance, int minimumPoints)
+void computeProximities(Point *h_points, int size, criteria_t *h_results, int chunk, double minimumDistance, int minimumPoints)
 {
   cudaError_t err;
   int i, blocks;
@@ -102,12 +101,15 @@ void computeProximities(Point *h_points, int size, double* h_times, criteria_t *
   // copy data to device
   err = cudaMemcpy(d_points, h_points, size * sizeof(Point), cudaMemcpyHostToDevice);
   checkError(err, __LINE__ - 1);
+
+  err = cudaMemcpy(d_results, h_results, chunk * sizeof(criteria_t), cudaMemcpyHostToDevice);
+  checkError(err, __LINE__ - 1);
   
   blocks = (int)floor((size * chunk) / THREADS_PER_BLOCK) + 1; // +1 handles case where size * chunk < THREADS_PER_BLOCK
 
   for (i = 0; i < chunk; i++)
   {
-    double t = h_times[i];
+    double t = h_results[i].t;
     
     setPointsPositions<<<blocks, THREADS_PER_BLOCK>>>(d_points, size, t);
     checkError(cudaGetLastError(), __LINE__ - 1);
@@ -115,7 +117,7 @@ void computeProximities(Point *h_points, int size, double* h_times, criteria_t *
     checkProximityCriteria<<<blocks, THREADS_PER_BLOCK>>>(d_points, size, t, minimumDistance, minimumPoints, &d_results[i]);
     checkError(cudaGetLastError(), __LINE__ - 1);
     
-    setResultMetadata<<<1, 1>>>(&d_results[i], t);
+    setResultMetadata<<<1, 1>>>(&d_results[i]);
     checkError(cudaGetLastError(), __LINE__ - 1);
     cudaDeviceSynchronize(); // wait for all threads to finish with current timestamp
   }

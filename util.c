@@ -41,10 +41,10 @@ Point* readData(char* path, int* N, int* K, double* D, int* tCount)
   return points;
 }
 
-void calculateTimes(double *timesArr, int low, int high, int tCount)
+void calculateTimes(criteria_t *results, int low, int high, int tCount)
 {
   #pragma omp parallel for
   for (int i = low; i < high; i++)
-      timesArr[i - low] = 2.0 * i / tCount - 1;
+      results[i - low].t = 2.0 * i / tCount - 1;
 }
 

@@ -7,7 +7,7 @@ int main(int argc, char* argv[])
   FILE* output;
   char filename[STR_MAX];
   int N, K, tCount, nProc, rank, chunk, remainder, startIndex, endIndex, i;
-  double D, t, startTime, endTime, *timesArr;
+  double D, t, startTime, endTime;
   Point* points;
   criteria_t* localResults, *globalResults;
   MPI_Status status;
@@ -52,30 +52,24 @@ int main(int argc, char* argv[])
     }
   }
 
-  // broadcast metadata data
+  // broadcast metadata
   MPI_Bcast(&N, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
   MPI_Bcast(&K, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
   MPI_Bcast(&D, 1, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
   MPI_Bcast(&tCount, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
-  // send points
-  if (rank == MASTER)
+  
+  // allocate points array in slave processes
+  if (rank != MASTER)
   {
-    #pragma omp parallel for
-    for (i = 1; i < nProc; i++)
-      MPI_Send(points, N, MPI_POINT, i, TAG, MPI_COMM_WORLD);
-  }
-  else
-  {
-    // allocate points array in slave processes
     points = (Point*)malloc(N * sizeof(Point));
     if (!points)
     {
       fprintf(stderr, "Failed to allocate points array in process %d. Aborting...\n", rank);
       MPI_Abort(MPI_COMM_WORLD, __LINE__);
     }
-    // recieve points array from master
-    MPI_Recv(points, N, MPI_POINT, MASTER, TAG, MPI_COMM_WORLD, &status);
   }
+  // broadcast points
+  MPI_Bcast(points, N, MPI_POINT, MASTER, MPI_COMM_WORLD);
 
   chunk = (tCount + 1) / nProc;
   remainder = (tCount + 1) % nProc;
@@ -88,18 +82,17 @@ int main(int argc, char* argv[])
     startIndex += remainder;
    
   localResults = (criteria_t*)malloc(chunk * sizeof(criteria_t));
-  timesArr = (double*)malloc(chunk * sizeof(double));
-  if (!localResults | !timesArr)
+  if (!localResults)
   {
       fprintf(stderr, "Failed allocating memory in process %d. Aborting...\n", rank);
       MPI_Abort(MPI_COMM_WORLD, __LINE__);    
   }
   
-  calculateTimes(timesArr, startIndex, endIndex, tCount); // calculate process' allocated times
-  computeProximities(points, N, timesArr, localResults, chunk, D, K);  
+  calculateTimes(localResults, startIndex, endIndex, tCount); // calculate process' allocated times
+  computeProximities(points, N, localResults, chunk, D, K);  
   MPI_Barrier(MPI_COMM_WORLD);
-  
-  if (rank != MASTER) // slaves sends to master results
+
+  if (rank != MASTER) // slaves send their results to master 
   {
     for (i = 0; i < chunk; i++)
     {
