@@ -5,6 +5,12 @@
 
 __device__ int criteriaMetCounter = 0;
 
+/**
+ * @brief Checks for any error in CUDA operations.
+ *        prints error message and stops the program for any CUDA error occured.
+ * @param err cudaError_t struct
+ * @param lineNum interger represent the line number on which the error occured. used for error finding.
+**/
 void checkError(cudaError_t err, int lineNum)
 {
   if (err != cudaSuccess)
@@ -14,6 +20,12 @@ void checkError(cudaError_t err, int lineNum)
   }
 }
 
+/**
+ * @brief Calculates the distance between two points p1 and p2.
+ * @param p1 Point 1
+ * @param p2 Point 2
+ * @return The distance between p1 and p2. -1 if p1 == p2.
+**/
 __device__ double calculateDistanceBetweenPoints(Point* p1, Point* p2)
 {
   if (p1->id == p2->id)
@@ -24,28 +36,50 @@ __device__ double calculateDistanceBetweenPoints(Point* p1, Point* p2)
   return sqrt(xDist + yDist);
 }
 
-__device__ int isPointSatisfiesCriteria(Point* ref, Point* points, int size, double minimumDistance, int minimumPoints)
+/**
+ * @brief Determines if the referenced point satisfies the proximity criteria.
+ * @param ref The referenced Point.
+ * @param points Array of all points.
+ * @param size Size of points array
+ * @param maximumDistance Maximum distance allowed between the reference point to other points to satisfiy the criteria.
+ * @param minimumPoints Minimum points wihin the distance threshold required around the reference point to satisfiy the criteria.
+ * @return 1 if the reference point satisfies the criteria, otherwise 0.
+**/
+__device__ int isPointSatisfiesCriteria(Point* ref, Point* points, int size, double maximumDistance, int minimumPoints)
 {
   int count = 0;
   for (int i = 0; i < size && count < minimumPoints; i++)
   {
     double dist = calculateDistanceBetweenPoints(ref, &points[i]);
-    count += dist >= 0 && dist < minimumDistance; // negative distance indicates distance to self
+    count += dist >= 0 && dist < maximumDistance; // negative distance indicates distance to self
   }
   return count >= minimumPoints;
 }
 
+/**
+ * @brief Helper device function to atomically reset the global criteria met counter.
+**/
 __device__ void resetCriteriaMetCounter()
 {
   atomicExch(&criteriaMetCounter, 0);
 }
 
+/**
+ * @brief Helper function to set the isCritetiraMet paramter to a referenced result struct.
+ * @param res Refernce to the current result struct.
+**/
 __global__ void setResultMetadata(criteria_t* res)
 {
-  res->isFound = criteriaMetCounter >= MIN_CRITERIA_POINTS;
+  res->isCritetiraMet = criteriaMetCounter >= MIN_CRITERIA_POINTS;
   resetCriteriaMetCounter();
 }
 
+/**
+ * @brief Calculates and sets the points positions for given time t.
+ * @param points Array of points
+ * @param size Size of points array
+ * @param t Current time value
+**/
 __global__ void setPointsPositions(Point *points, int size, double t)
 {
   int threadId = blockIdx.x * blockDim.x + threadIdx.x;
@@ -57,13 +91,21 @@ __global__ void setPointsPositions(Point *points, int size, double t)
   p->y = p->a * p->x + p->b;
 }
 
-__global__ void checkProximityCriteria(Point *points, int size, double t, double minimumDistance, int minimumPoints, criteria_t* result)
+/**
+ * @brief Checks which points satisfies the proximity criteria in a given time t. results are saved in the referenced result struct.
+ * @param points Array of points
+ * @param size Size of points array
+ * @param maximumDistance Maximum distance allowed between the reference point to other points to satisfiy the criteria.
+ * @param minimumPoints Minimum points wihin the distance threshold required around the reference point to satisfiy the criteria.
+ * @param result Refernce to the current result struct
+**/
+__global__ void checkProximityCriteria(Point *points, int size, double maximumDistance, int minimumPoints, criteria_t* result)
 {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid > size|| atomicAdd(&criteriaMetCounter, 0)  >= MIN_CRITERIA_POINTS)
     return;
   
-  if (isPointSatisfiesCriteria(&points[tid], points, size, minimumDistance, minimumPoints))
+  if (isPointSatisfiesCriteria(&points[tid], points, size, maximumDistance, minimumPoints))
   {
     /* 
       try to claim the right to increment criteriaMetCounter and update the results array.
@@ -84,7 +126,7 @@ __global__ void checkProximityCriteria(Point *points, int size, double t, double
   }
 }
 
-void computeProximities(Point *h_points, int size, criteria_t *h_results, int chunk, double minimumDistance, int minimumPoints)
+void computeProximities(Point *h_points, int size, criteria_t *h_results, int chunk, double maximumDistance, int minimumPoints)
 {
   cudaError_t err;
   int i, blocks;
@@ -109,12 +151,10 @@ void computeProximities(Point *h_points, int size, criteria_t *h_results, int ch
 
   for (i = 0; i < chunk; i++)
   {
-    double t = h_results[i].t;
-    
-    setPointsPositions<<<blocks, THREADS_PER_BLOCK>>>(d_points, size, t);
+    setPointsPositions<<<blocks, THREADS_PER_BLOCK>>>(d_points, size, h_results[i].t);
     checkError(cudaGetLastError(), __LINE__ - 1);
     
-    checkProximityCriteria<<<blocks, THREADS_PER_BLOCK>>>(d_points, size, t, minimumDistance, minimumPoints, &d_results[i]);
+    checkProximityCriteria<<<blocks, THREADS_PER_BLOCK>>>(d_points, size, maximumDistance, minimumPoints, &d_results[i]);
     checkError(cudaGetLastError(), __LINE__ - 1);
     
     setResultMetadata<<<1, 1>>>(&d_results[i]);

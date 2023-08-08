@@ -98,8 +98,8 @@ int main(int argc, char* argv[])
     {
       criteria_t res = localResults[i];
       MPI_Send(&res.t, 1, MPI_DOUBLE, MASTER, TAG, MPI_COMM_WORLD);
-      MPI_Send(&res.isFound, 1, MPI_INT, MASTER, TAG, MPI_COMM_WORLD);
-      if (res.isFound)
+      MPI_Send(&res.isCritetiraMet, 1, MPI_INT, MASTER, TAG, MPI_COMM_WORLD);
+      if (res.isCritetiraMet)
         MPI_Send(&res.pointIDs, MIN_CRITERIA_POINTS, MPI_INT, MASTER, TAG, MPI_COMM_WORLD);
     }
   }
@@ -113,11 +113,11 @@ int main(int argc, char* argv[])
       if (i >= chunk)
       {
         MPI_Recv(&res.t, 1, MPI_DOUBLE, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
-        MPI_Recv(&res.isFound, 1, MPI_INT, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
-        if (res.isFound)
+        MPI_Recv(&res.isCritetiraMet, 1, MPI_INT, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
+        if (res.isCritetiraMet)
           MPI_Recv(&res.pointIDs, MIN_CRITERIA_POINTS, MPI_INT, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
       }
-      if (res.isFound == 1)
+      if (res.isCritetiraMet == 1)
       {
         printf("Points ");
         for (int j = 0; j < MIN_CRITERIA_POINTS - 1; j++)
