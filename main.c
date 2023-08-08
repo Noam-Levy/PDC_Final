@@ -96,25 +96,27 @@ int main(int argc, char* argv[])
   calculateTimes(localResults, startIndex, endIndex, tCount); // calculate process' allocated times
   computeProximities(points, N, localResults, chunk, D, K);  
   MPI_Barrier(MPI_COMM_WORLD);
-  MPI_Gather(localResults, chunk, MPI_CRITERIA_T, globalResults, chunk, MPI_CRITERIA_T, MASTER, MPI_COMM_WORLD);
-  
-  if (rank == MASTER)
+
+  if (rank != MASTER)
   {
-    int found = 0;
-    for (i = 0; i <= tCount; i++)
+    // slaves send their results to master 
+    MPI_Send(&chunk, 1, MPI_INT, MASTER, TAG, MPI_COMM_WORLD);
+    MPI_Send(localResults, chunk, MPI_CRITERIA_T, MASTER, TAG, MPI_COMM_WORLD);
+  }
+  else
+  {
+    // prepare global results array
+    memcpy(globalResults, localResults, chunk * sizeof(criteria_t));
+    int offset = chunk;
+    for (i = 1; i < nProc; i++)
     {
-      criteria_t res = globalResults[i];
-      if (res.isCritetiraMet == 1)
-      {
-        printf("Points ");
-        for (int j = 0; j < MIN_CRITERIA_POINTS - 1; j++)
-          printf("%d, ", res.pointIDs[j]);
-        printf("%d satisfy Proximity Criteria at t=%.2f\n", res.pointIDs[MIN_CRITERIA_POINTS - 1], res.t);
-        found = 1;
-      }
+      int size;
+      MPI_Recv(&size, 1, MPI_INT, i, TAG, MPI_COMM_WORLD, &status);
+      MPI_Recv(globalResults + offset, size, MPI_CRITERIA_T, i, TAG, MPI_COMM_WORLD, &status);
+      offset += size;
     }
-    if (found == 0)
-      printf("There were no %d points found for any t.\n", MIN_CRITERIA_POINTS);
+
+    printResults(globalResults, tCount);
     
     // print execution time to console.
     endTime = MPI_Wtime();
