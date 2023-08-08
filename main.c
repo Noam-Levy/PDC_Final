@@ -27,6 +27,11 @@ int main(int argc, char* argv[])
   MPI_Type_contiguous(sizeof(Point), MPI_BYTE, &MPI_POINT);
   MPI_Type_commit(&MPI_POINT);
 
+  // define MPI_CRITERIA_T datatype
+  MPI_Datatype MPI_CRITERIA_T;
+  MPI_Type_contiguous(sizeof(criteria_t), MPI_BYTE, &MPI_CRITERIA_T);
+  MPI_Type_commit(&MPI_CRITERIA_T);
+
   if (rank == MASTER)
   {
     argc < 2 ? strcpy(filename, "./input.txt") : strcpy(filename, argv[1]);
@@ -91,32 +96,14 @@ int main(int argc, char* argv[])
   calculateTimes(localResults, startIndex, endIndex, tCount); // calculate process' allocated times
   computeProximities(points, N, localResults, chunk, D, K);  
   MPI_Barrier(MPI_COMM_WORLD);
-
-  if (rank != MASTER) // slaves send their results to master 
+  MPI_Gather(localResults, chunk, MPI_CRITERIA_T, globalResults, chunk, MPI_CRITERIA_T, MASTER, MPI_COMM_WORLD);
+  
+  if (rank == MASTER)
   {
-    for (i = 0; i < chunk; i++)
-    {
-      criteria_t res = localResults[i];
-      MPI_Send(&res.t, 1, MPI_DOUBLE, MASTER, TAG, MPI_COMM_WORLD);
-      MPI_Send(&res.isCritetiraMet, 1, MPI_INT, MASTER, TAG, MPI_COMM_WORLD);
-      if (res.isCritetiraMet)
-        MPI_Send(&res.pointIDs, MIN_CRITERIA_POINTS, MPI_INT, MASTER, TAG, MPI_COMM_WORLD);
-    }
-  }
-  else
-  {
-    memcpy(globalResults, localResults, chunk * sizeof(criteria_t));
     int found = 0;
     for (i = 0; i <= tCount; i++)
     {
       criteria_t res = globalResults[i];
-      if (i >= chunk)
-      {
-        MPI_Recv(&res.t, 1, MPI_DOUBLE, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
-        MPI_Recv(&res.isCritetiraMet, 1, MPI_INT, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
-        if (res.isCritetiraMet)
-          MPI_Recv(&res.pointIDs, MIN_CRITERIA_POINTS, MPI_INT, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status);
-      }
       if (res.isCritetiraMet == 1)
       {
         printf("Points ");
@@ -126,7 +113,6 @@ int main(int argc, char* argv[])
         found = 1;
       }
     }
-
     if (found == 0)
       printf("There were no %d points found for any t.\n", MIN_CRITERIA_POINTS);
     
@@ -137,6 +123,7 @@ int main(int argc, char* argv[])
   }
  
   MPI_Type_free(&MPI_POINT);
+  MPI_Type_free(&MPI_CRITERIA_T);
   free(points);
   free(localResults);
   MPI_Finalize();
