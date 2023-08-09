@@ -58,6 +58,13 @@ Point* readData(char* path, int* N, int* K, double* D, int* tCount);
 void calculateTimes(criteria_t *results, int startIndex, int endIndex, int tCount);
 
 /**
+ * @brief Prints the results array to stdout.
+ * @param results Results array.
+ * @param tCount Number of expected results.
+**/
+void printResults(criteria_t *results, int tCount);
+
+/**
  * @brief Checks which points satisfies the proximity criteria for the allocated times.
  *        This function utlizes CUDA to operate.
  * @param h_points Host's array of points.

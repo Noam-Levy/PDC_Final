@@ -48,3 +48,27 @@ void calculateTimes(criteria_t *results, int low, int high, int tCount)
       results[i - low].t = 2.0 * i / tCount - 1;
 }
 
+void printResults(criteria_t* results, int tCount)
+{
+  int found = 0;
+  
+  #pragma omp parallel for ordered shared(found)
+  for (int i = 0; i <= tCount; i++)
+  {
+    criteria_t res = results[i];
+    if (res.isCritetiraMet == 1)
+    {
+      #pragma omp ordered
+      {
+        printf("Points ");
+        for (int j = 0; j < MIN_CRITERIA_POINTS - 1; j++)
+          printf("%d, ", res.pointIDs[j]);
+        printf("%d satisfy Proximity Criteria at t=%.2f\n", res.pointIDs[MIN_CRITERIA_POINTS - 1], res.t);
+      }
+      found = 1;
+    }
+  }
+
+  if (found == 0)
+    printf("There were no %d points found for any t.\n", MIN_CRITERIA_POINTS);
+}
