@@ -24,16 +24,16 @@ void checkError(cudaError_t err, int lineNum)
  * @brief Calculates the distance between two points p1 and p2.
  * @param p1 Point 1
  * @param p2 Point 2
- * @return The distance between p1 and p2. -1 if p1 == p2.
+ * @returns The distance between p1 and p2. -1 if p1 == p2.
 **/
 __device__ double calculateDistanceBetweenPoints(Point* p1, Point* p2)
 {
   if (p1->id == p2->id)
     return -1;
   
-  double xDist = pow((p2->x - p1->x), 2);
-  double yDist = pow(p2->y - p1->y, 2);
-  return sqrt(xDist + yDist);
+  double xDistSqrd = (p2->x - p1->x) * (p2->x - p1->x);  
+  double yDistSqrd = (p2->y - p1->y) * (p2->y - p1->y);
+  return sqrt(xDistSqrd + yDistSqrd);
 }
 
 /**
@@ -43,7 +43,7 @@ __device__ double calculateDistanceBetweenPoints(Point* p1, Point* p2)
  * @param size Size of points array
  * @param maximumDistance Maximum distance allowed between the reference point to other points to satisfiy the criteria.
  * @param minimumPoints Minimum points wihin the distance threshold required around the reference point to satisfiy the criteria.
- * @return 1 if the reference point satisfies the criteria, otherwise 0.
+ * @returns 1 if the reference point satisfies the criteria, otherwise 0.
 **/
 __device__ int isPointSatisfiesCriteria(Point* ref, Point* points, int size, double maximumDistance, int minimumPoints)
 {
