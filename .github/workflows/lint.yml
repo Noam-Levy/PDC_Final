@@ -30,7 +30,7 @@ jobs:
           VALIDATE_CLANG_FORMAT: true
           FIX_CPP_FORMAT: true
           VALIDATE_CPP_FORMAT: true
-          FILTER_REGEX_EXCLUDE: "*Common/*"
+          FILTER_REGEX_EXCLUDE: (^|/)Common/
 
       - name: Commit and push linting fixes
         # Run only on:
