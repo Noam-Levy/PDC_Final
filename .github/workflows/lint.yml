@@ -27,6 +27,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FIX_CLANG_FORMAT: true
+          VALIDATE_CLANG_FORMAT: true
+          FILTER_REGEX_EXCLUDE: "*Common/*"
 
       - name: Commit and push linting fixes
         # Run only on:
